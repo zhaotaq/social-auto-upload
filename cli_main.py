@@ -3,6 +3,9 @@ import asyncio
 from datetime import datetime
 from os.path import exists
 from pathlib import Path
+import json
+import tempfile
+import os
 
 from conf import BASE_DIR
 from uploader.douyin_uploader.main import douyin_setup, DouYinVideo
@@ -261,27 +264,70 @@ async def run_workflow_interactively():
         except ValueError:
             print("Invalid input. Please enter a number.")
 
+    # Now, prompt user to select video types for the selected account(s)
+    if selected_account_config and "accounts" in selected_account_config and selected_account_config["accounts"]:
+        # Assuming all selected accounts have the same video types for simplicity in this menu
+        # If not, this part would need to be more complex.
+        available_video_types = selected_account_config["accounts"][0].get('video_types', [])
+
+        if not available_video_types:
+            print(f"No video types defined for the selected account(s). Cannot run workflow.")
+            return
+
+        print("\nSelect video type(s) to upload:")
+        for i, video_type in enumerate(available_video_types):
+            print(f"{i + 1}. {video_type}")
+        print(f"{len(available_video_types) + 1}. All Video Types")
+
+        while True:
+            try:
+                type_choice_input = input(f"Enter video type number(s) (e.g., 1,3 or {len(available_video_types) + 1} for all): ")
+                choices = [int(c.strip()) - 1 for c in type_choice_input.split(',')]
+
+                selected_types = []
+                invalid_choice = False
+                for choice in choices:
+                    if choice == len(available_video_types):
+                        selected_types = available_video_types
+                        break # Selected all, exit inner loop
+                    elif 0 <= choice < len(available_video_types):
+                        selected_types.append(available_video_types[choice])
+                    else:
+                        print(f"Invalid video type number: {choice + 1}")
+                        invalid_choice = True
+                        break # Exit inner loop on invalid choice
+
+                if not invalid_choice and selected_types:
+                    # Update the config to include only selected video types
+                    for account in selected_account_config["accounts"]:
+                         account['video_types'] = selected_types
+                    print(f"Running workflow for video type(s): {selected_types}")
+                    break # Exit outer loop
+                elif not invalid_choice:
+                     print("No video types selected.")
+                     return # Exit function if no types selected
+
+            except ValueError:
+                print("Invalid input. Please enter number(s) separated by commas.")
+            except Exception as e:
+                 print(f"An unexpected error occurred during video type selection: {e}")
+                 return # Exit function on unexpected error
+
+    else:
+        print("Error: Could not retrieve account configuration.")
+        return
+
     # Now, call the main run_workflow function with the selected account config
     try:
-        # We need to pass the config dictionary, not the path, if we're filtering accounts
-        # We'll need to adjust run_workflow to accept either path or dict, or create a wrapper
-        # For simplicity now, let's adjust run_workflow to accept the config dict directly.
-        # Note: This requires a small change in utils/base_social_media.py as well.
-
-        # Option 1: Adjust run_workflow to accept dict (requires change in utils)
-        from utils.base_social_media import run_workflow # Import here to avoid circular dependency
-        await run_workflow(selected_account_config) # Passing dict instead of path
-
-        # Option 2 (Alternative): Create a temporary config file with selected account and pass path
-        # import tempfile
-        # with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as tmp_file:
-        #     json.dump(selected_account_config, tmp_file, ensure_ascii=False, indent=4)
-        #     tmp_file_path = tmp_file.name
-        # try:
-        #     from utils.base_social_media import run_workflow
-        #     await run_workflow(tmp_file_path) # Pass path to temp file
-        # finally:
-        #     os.remove(tmp_file_path) # Clean up temp file
+        # Option 2: Create a temporary config file with selected account and pass path
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False, encoding='utf-8') as tmp_file:
+            json.dump(selected_account_config, tmp_file, ensure_ascii=False, indent=4)
+            tmp_file_path = tmp_file.name
+        try:
+            from utils.base_social_media import run_workflow
+            await run_workflow(tmp_file_path) # Pass path to temp file
+        finally:
+            os.remove(tmp_file_path) # Clean up temp file
 
     except Exception as e:
          print(f"An error occurred during workflow execution: {e}")
