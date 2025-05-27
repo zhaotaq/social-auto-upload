@@ -13,7 +13,7 @@ from uploader.ks_uploader.main import ks_setup, KSVideo
 from uploader.tencent_uploader.main import weixin_setup, TencentVideo
 from uploader.tk_uploader.main_chrome import tiktok_setup, TiktokVideo
 from utils.base_social_media import get_supported_social_media, get_cli_action, SOCIAL_MEDIA_DOUYIN, \
-    SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_KUAISHOU, load_workflow_config
+    SOCIAL_MEDIA_TENCENT, SOCIAL_MEDIA_TIKTOK, SOCIAL_MEDIA_KUAISHOU, load_workflow_config, run_workflow
 from utils.constant import TencentZoneTypes
 from utils.files_times import get_title_and_hashtags, generate_schedule_time_next_day
 
@@ -402,11 +402,6 @@ async def run_workflow_interactively():
             json.dump(selected_account_config, tmp_file, ensure_ascii=False, indent=4)
             tmp_file_path = tmp_file.name
         try:
-            from utils.base_social_media import run_workflow
-            # Need to pass the schedule times to run_workflow
-            # This requires modifying run_workflow to accept a schedule_times list or key in config
-            # For now, the schedule is added to selected_account_config and we pass that via temp file.
-            # Assuming run_workflow is updated to read 'generated_schedule' from the config.
             await run_workflow(tmp_file_path) # Pass path to temp file
         finally:
             os.remove(tmp_file_path) # Clean up temp file

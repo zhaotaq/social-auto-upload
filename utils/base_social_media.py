@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import List
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+import csv
 
 from conf import BASE_DIR
 
@@ -24,6 +25,10 @@ SOCIAL_MEDIA_KUAISHOU = "kuaishou"
 
 from utils.files_times import get_title_and_hashtags, generate_schedule_time_next_day
 from utils.constant import TencentZoneTypes # Needed for Tencent video category
+from utils.log import tencent_logger # Ensure tencent_logger is imported at the top
+
+# Import playwright types at the top level
+import playwright._impl._api_types # Import playwright types here
 
 
 def get_supported_social_media() -> List[str]:
