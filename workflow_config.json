@@ -1,0 +1,25 @@
+{
+    "accounts": [
+        {
+            "name": "A 梦落枫林间",
+            "video_types": ["冒险岛枫之传说", "梦幻西游"],
+            "platforms": ["douyin", "kuaishou", "bilibili", "tencent"]
+        },
+        {
+            "name": "B-西游冒险纪",
+            "video_types": ["冒险岛枫之传说", "梦幻西游"],
+            "platforms": ["douyin", "kuaishou", "bilibili", "tencent"]
+        },
+        {
+            "name": "A-时光像素辑",
+            "video_types": ["冒险岛枫之传说", "梦幻西游"],
+            "platforms": ["douyin", "kuaishou", "tencent"]
+        },
+        {
+            "name": "B-萌侠跳跳糖",
+            "video_types": ["冒险岛枫之传说", "梦幻西游"],
+            "platforms": ["douyin", "kuaishou", "bilibili", "tencent"]
+        }
+    ],
+    "schedule_time": "第二天下午4点"
+}
