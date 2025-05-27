@@ -13,7 +13,7 @@ from utils.log import tencent_logger
 
 def format_str_for_short_title(origin_title: str) -> str:
     # 定义允许的特殊字符
-    allowed_special_chars = "《》“”:+?%°"
+    allowed_special_chars = "《》"":+?%°"
 
     # 移除不允许的特殊字符
     filtered_chars = [char if char.isalnum() or char in allowed_special_chars else ' ' if char == ',' else '' for
@@ -135,44 +135,98 @@ class TencentVideo(object):
 
     async def upload(self, playwright: Playwright) -> None:
         # 使用 Chromium (这里使用系统内浏览器，用chromium 会造成h264错误
-        browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
-        # 创建一个浏览器上下文，使用指定的 cookie 文件
-        context = await browser.new_context(storage_state=f"{self.account_file}")
-        context = await set_init_script(context)
+        browser = None
+        context = None
+        page = None # Initialize page variable
+        try:
+            tencent_logger.info("[-] Launching browser for Tencent upload...")
+            browser = await playwright.chromium.launch(headless=False, executable_path=self.local_executable_path)
+            tencent_logger.info("[-] Browser launched.")
+            
+            tencent_logger.info(f"[-] Creating new context with storage state from {self.account_file}...")
+            context = await browser.new_context(storage_state=f"{self.account_file}")
+            tencent_logger.info("[-] Context created.")
+            
+            context = await set_init_script(context)
+            tencent_logger.info("[-] Init script set.")
 
-        # 创建一个新的页面
-        page = await context.new_page()
-        # 访问指定的 URL
-        await page.goto("https://channels.weixin.qq.com/platform/post/create")
-        tencent_logger.info(f'[+]正在上传-------{self.title}.mp4')
-        # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
-        await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create")
-        # await page.wait_for_selector('input[type="file"]', timeout=10000)
-        file_input = page.locator('input[type="file"]')
-        await file_input.set_input_files(self.file_path)
-        # 填充标题和话题
-        await self.add_title_tags(page)
-        # 添加商品
-        # await self.add_product(page)
-        # 合集功能
-        await self.add_collection(page)
-        # 原创选择
-        await self.add_original(page)
-        # 检测上传状态
-        await self.detect_upload_status(page)
-        if self.publish_date != 0:
-            await self.set_schedule_time_tencent(page, self.publish_date)
-        # 添加短标题
-        await self.add_short_title(page)
+            tencent_logger.info("[-] Creating new page...")
+            page = await context.new_page()
+            tencent_logger.info("[-] Page created.")
+            
+            tencent_logger.info(f"[-] Navigating to upload page: https://channels.weixin.qq.com/platform/post/create")
+            await page.goto("https://channels.weixin.qq.com/platform/post/create")
+            tencent_logger.info("[-] Navigation complete.")
+            
+            tencent_logger.info(f'[+]正在上传-------{self.title}.mp4')
+            # 等待页面跳转到指定的 URL，没进入，则自动等待到超时
+            tencent_logger.info("[-] Waiting for upload page URL...")
+            await page.wait_for_url("https://channels.weixin.qq.com/platform/post/create", timeout=10000)
+            tencent_logger.info("[-] Upload page URL confirmed.")
+            
+            # await page.wait_for_selector('input[type="file"]', timeout=10000)
+            tencent_logger.info("[-] Locating file input...")
+            file_input = page.locator('input[type="file"]')
+            tencent_logger.info("[-] File input located.")
+            
+            tencent_logger.info(f"[-] Setting input files to {self.file_path}...")
+            await file_input.set_input_files(self.file_path)
+            tencent_logger.info("[-] Input files set.")
+            
+            # 填充标题和话题
+            tencent_logger.info("[-] Adding title and tags...")
+            await self.add_title_tags(page)
+            tencent_logger.info("[-] Title and tags added.")
+            
+            # 添加商品
+            # await self.add_product(page)
+            
+            # 合集功能
+            tencent_logger.info("[-] Adding collection...")
+            await self.add_collection(page)
+            tencent_logger.info("[-] Collection added.")
+            
+            # 原创选择
+            tencent_logger.info("[-] Adding original declaration...")
+            await self.add_original(page)
+            tencent_logger.info("[-] Original declaration processed.")
+            
+            # 检测上传状态
+            tencent_logger.info("[-] Detecting upload status...")
+            await self.detect_upload_status(page)
+            tencent_logger.info("[-] Upload status detected.")
+            
+            if self.publish_date != 0:
+                tencent_logger.info(f"[-] Setting schedule time to {self.publish_date}...")
+                await self.set_schedule_time_tencent(page, self.publish_date)
+                tencent_logger.info("[-] Schedule time set.")
+            
+            # 添加短标题
+            tencent_logger.info("[-] Adding short title...")
+            await self.add_short_title(page)
+            tencent_logger.info("[-] Short title added.")
 
-        await self.click_publish(page)
+            tencent_logger.info("[-] Clicking publish button...")
+            await self.click_publish(page)
+            tencent_logger.info("[-] Publish clicked, waiting for post list page...")
 
-        await context.storage_state(path=f"{self.account_file}")  # 保存cookie
-        tencent_logger.success('  [-]cookie更新完毕！')
-        await asyncio.sleep(2)  # 这里延迟是为了方便眼睛直观的观看
-        # 关闭浏览器上下文和浏览器实例
-        await context.close()
-        await browser.close()
+            try:
+                await context.storage_state(path=f"{self.account_file}")  # 保存cookie
+                tencent_logger.success('  [-]cookie更新完毕！')
+            except Exception as e:
+                tencent_logger.warning(f'  [-] Failed to save cookie: {e}') # Log a warning if saving fails
+
+            await asyncio.sleep(2)  # 这里延迟是为了方便眼睛直观的观看
+        finally:
+            # Close browser and context even if errors occur
+            if context:
+                tencent_logger.info("[-] Closing context...")
+                await context.close()
+                tencent_logger.info("[-] Context closed.")
+            if browser:
+                tencent_logger.info("[-] Closing browser...")
+                await browser.close()
+                tencent_logger.info("[-] Browser closed.")
 
     async def add_short_title(self, page):
         short_title_element = page.get_by_text("短标题", exact=True).locator("..").locator(
@@ -188,7 +242,7 @@ class TencentVideo(object):
                 publish_buttion = page.locator('div.form-btns button:has-text("发表")')
                 if await publish_buttion.count():
                     await publish_buttion.click()
-                await page.wait_for_url("https://channels.weixin.qq.com/platform/post/list", timeout=1500)
+                await page.wait_for_url("https://channels.weixin.qq.com/platform/post/list", timeout=10000)
                 tencent_logger.success("  [-]视频发布成功")
                 break
             except Exception as e:
