@@ -55,16 +55,20 @@ async def run_workflow(config: dict | str):
     
     generated_schedule_times = None
     
+    workflow_config = None
+
     if isinstance(config, str):
         print(f"Loading workflow config from {config}")
-        config = load_workflow_config(config)
+        workflow_config = load_workflow_config(config)
+        if 'generated_schedule' in workflow_config:
+            generated_schedule_times = workflow_config.pop('generated_schedule')
+            print(f"Found generated schedule with {len(generated_schedule_times)} entries from file.")
     else:
         print("Using provided workflow config dictionary.")
-        # Assuming config is already a dictionary, validate it if necessary
-        # Check if the config dictionary contains the generated schedule
-        if 'generated_schedule' in config:
-            generated_schedule_times = config.pop('generated_schedule') # Get and remove to avoid passing it down further if not needed
-            print(f"Found generated schedule with {len(generated_schedule_times)} entries.")
+        workflow_config = config
+        if 'generated_schedule' in workflow_config:
+            generated_schedule_times = workflow_config.pop('generated_schedule')
+            print(f"Found generated schedule with {len(generated_schedule_times)} entries from dictionary.")
 
     print("Workflow config loaded successfully." if isinstance(config, str) else "Using provided workflow config.") # Adjust message
     print("Starting workflow execution...")
@@ -85,7 +89,9 @@ async def run_workflow(config: dict | str):
     from utils.files_times import get_title_and_hashtags, generate_schedule_time_next_day
     from utils.constant import TencentZoneTypes # Needed for Tencent video category
 
-    for account in config.get('accounts', []):
+    video_index_counter = 0 # Add a counter to track the overall video index across types
+
+    for account in workflow_config.get('accounts', []):
         account_name = account.get('name')
         video_types = account.get('video_types', [])
         platforms = account.get('platforms', [])
@@ -114,28 +120,38 @@ async def run_workflow(config: dict | str):
 
             print(f"Found {len(video_files)} videos for type '{video_type}': {[f.name for f in video_files]}")
             
-            # Generate schedule times for all videos of this type for this account
-            # We assume the schedule time logic applies to all platforms for these videos
-            # You might need to adjust this based on your specific scheduling needs
-            # Using 16:00 as a default time based on examples
-            try:
-                publish_datetimes = generate_schedule_time_next_day(len(video_files), 1, daily_times=[16])
-            except Exception as e:
-                print(f"Error generating schedule times for {video_type}: {e}. Skipping videos for this type.")
-                continue
-
             for index, video_file in enumerate(video_files):
                 video_path_str = str(video_file)
                 title, tags = get_title_and_hashtags(video_path_str)
                 
+                publish_date = 0 # Default to immediate publish if no schedule is generated
+
                 # Use generated schedule time if available, otherwise use the default logic
-                if generated_schedule_times and index < len(generated_schedule_times):
-                    # Convert timestamp back to datetime object
-                    publish_date = datetime.fromtimestamp(generated_schedule_times[index])
-                    print(f"Using generated schedule time: {publish_date}")
+                if generated_schedule_times and video_index_counter < len(generated_schedule_times):
+                    # Convert timestamp back to datetime object (assuming timestamps are in seconds)
+                    # Note: cli_main.py generates string times in YYYY-MM-DD HH:MM format, not timestamps.
+                    # We need to parse the string into a datetime object here.
+                    try:
+                        publish_date_str = generated_schedule_times[video_index_counter]
+                        publish_date = datetime.strptime(publish_date_str, '%Y-%m-%d %H:%M')
+                        print(f"Using generated schedule time for video {video_file.name}: {publish_date}")
+                    except Exception as e:
+                        print(f"Warning: Failed to parse generated schedule time '{publish_date_str}' for video {video_file.name}: {e}. Using default immediate publish.")
+                        publish_date = 0
                 else:
-                    publish_date = publish_datetimes[index] if publish_datetimes else 0 # Use generated schedule or immediate
-                
+                    # Fallback to original default logic if no generated schedule or index is out of bounds
+                    # This part might need adjustment based on desired fallback behavior.
+                    # Currently, if generated_schedule_times is not available or exhausted,
+                    # it will default to immediate publish (publish_date = 0) which might not be desired.
+                    # If a default *scheduled* behavior is needed when custom schedule is not provided/exhausted,
+                    # the original generate_schedule_time_next_day logic or similar would be needed here.
+                    # For now, adhering to the logic of using generated schedule if present, else immediate.
+                    print(f"Warning: No generated schedule time available for video {video_file.name}. Using default immediate publish.")
+                    publish_date = 0
+
+                # Increment the global video index counter
+                video_index_counter += 1
+
                 if not title:
                     print(f"Warning: Skipping video {video_file.name} due to missing title (.txt file).")
                     continue
@@ -143,7 +159,7 @@ async def run_workflow(config: dict | str):
                 print(f"\n  Processing video: {video_file.name}")
                 print(f"    Title: {title}")
                 print(f"    Tags: {tags}")
-                print(f"    Scheduled for: {publish_date}")
+                print(f"    Scheduled for: {publish_date if publish_date != 0 else 'Immediate'}") # Display 'Immediate' if publish_date is 0
                 
                 # List to hold upload tasks for different platforms for this video
                 upload_tasks = []
@@ -241,7 +257,7 @@ async def run_workflow(config: dict | str):
                             # print(f"      Upload to {platform_name} for {video_file.name} completed successfully.") # Optional success message
 
                 # Add a small delay between processing different videos
-                await asyncio.sleep(5) # Reduced delay as uploads are now parallel
+                # await asyncio.sleep(5) # Original delay - removed as it's between videos within a video type
                 
                 # After all platforms attempted for this video, save cookies if necessary
                 # This assumes cookie saving is part of the uploader's cleanup or state management

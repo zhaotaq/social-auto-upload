@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from os.path import exists
 from pathlib import Path
 import json
@@ -76,35 +76,6 @@ async def main():
             await weixin_setup(str(account_file), handle=True)
         elif args.platform == SOCIAL_MEDIA_KUAISHOU:
             await ks_setup(str(account_file), handle=True)
-    elif args.action == 'upload':
-        title, tags = get_title_and_hashtags(args.video_file)
-        video_file = args.video_file
-
-        if args.publish_type == 0:
-            print("Uploading immediately...")
-            publish_date = 0
-        else:
-            print("Scheduling videos...")
-            publish_date = parse_schedule(args.schedule)
-
-        if args.platform == SOCIAL_MEDIA_DOUYIN:
-            await douyin_setup(account_file, handle=False)
-            app = DouYinVideo(title, video_file, tags, publish_date, account_file)
-        elif args.platform == SOCIAL_MEDIA_TIKTOK:
-            await tiktok_setup(account_file, handle=True)
-            app = TiktokVideo(title, video_file, tags, publish_date, account_file)
-        elif args.platform == SOCIAL_MEDIA_TENCENT:
-            await weixin_setup(account_file, handle=True)
-            category = TencentZoneTypes.LIFESTYLE.value  # 标记原创需要否则不需要传
-            app = TencentVideo(title, video_file, tags, publish_date, account_file, category)
-        elif args.platform == SOCIAL_MEDIA_KUAISHOU:
-            await ks_setup(account_file, handle=True)
-            app = KSVideo(title, video_file, tags, publish_date, account_file)
-        else:
-            print("Wrong platform, please check your input")
-            exit()
-
-        await app.main()
     elif args.action == 'workflow':
         print(f"Running workflow with config file: {args.config}")
         # Call a function to handle the workflow
@@ -247,6 +218,7 @@ async def run_workflow_interactively():
         print(f"{i + 1}. {account.get('name')}")
     print(f"{len(accounts) + 1}. All Accounts") # Option to run for all
 
+    selected_account_config = None
     while True:
         try:
             account_choice = int(input(f"Enter account number (1-{len(accounts) + 1}): ")) - 1
@@ -279,13 +251,14 @@ async def run_workflow_interactively():
             print(f"{i + 1}. {video_type}")
         print(f"{len(available_video_types) + 1}. All Video Types")
 
+        selected_types = []
         while True:
             try:
                 type_choice_input = input(f"Enter video type number(s) (e.g., 1,3 or {len(available_video_types) + 1} for all): ")
                 choices = [int(c.strip()) - 1 for c in type_choice_input.split(',')]
 
-                selected_types = []
                 invalid_choice = False
+                selected_types = [] # Reset selected_types for retry
                 for choice in choices:
                     if choice == len(available_video_types):
                         selected_types = available_video_types
@@ -302,8 +275,35 @@ async def run_workflow_interactively():
                     for account in selected_account_config["accounts"]:
                          account['video_types'] = selected_types
                     print(f"Running workflow for video type(s): {selected_types}")
-                    
-                    # Now, ask for scheduling details
+
+                    # --- New Schedule Date Selection Logic ---
+                    print("\n===== Schedule Start Date =====")
+                    print("1. Default (Start Tomorrow)")
+                    print("2. Custom Start Date")
+                    print("===============================")
+
+                    start_date = None
+                    while True:
+                        start_choice_input = input("Enter your choice (1 or 2): ")
+                        if start_choice_input == '1':
+                            start_date = datetime.now() + timedelta(days=1)
+                            print(f"Workflow will start scheduling from tomorrow: {start_date.strftime('%Y-%m-%d')}")
+                            break
+                        elif start_choice_input == '2':
+                            while True:
+                                date_str = input("Enter custom start date in YYYY-MM-DD format (e.g., 2024-12-31): ")
+                                try:
+                                    start_date = datetime.strptime(date_str, '%Y-%m-%d')
+                                    print(f"Workflow will start scheduling from: {start_date.strftime('%Y-%m-%d')}")
+                                    break
+                                except ValueError:
+                                    print("Invalid date format. Please use YYYY-MM-DD.")
+                            break
+                        else:
+                            print("Invalid choice. Please enter 1 or 2.")
+                    # --- End New Schedule Date Selection Logic ---
+
+                    # Now, ask for videos per day
                     while True:
                         try:
                             total_videos_in_selection = 0
@@ -315,52 +315,72 @@ async def run_workflow_interactively():
                                     if account_name:
                                         video_type_path = base_videos_path / account_name / video_type
                                         if video_type_path.exists() and video_type_path.is_dir():
-                                            total_videos_in_selection += len(list(video_type_path.glob("*.mp4")))
-                                            
+                                            # Count .mp4 files recursively
+                                            for _ in video_type_path.glob("**/*.mp4"):
+                                                total_videos_in_selection += 1
+
+
                             if total_videos_in_selection == 0:
                                 print("No videos found in the selected types. Exiting workflow.")
                                 return # Exit function if no videos found
-                                            
-                            days_to_distribute = int(input(f"Enter the number of days to distribute {total_videos_in_selection} videos: "))
+
+                            print(f"Found {total_videos_in_selection} videos in the selected categories.")
+
                             videos_per_day = int(input(f"Enter the number of videos to upload per day: "))
-                            
-                            if days_to_distribute <= 0 or videos_per_day <= 0:
-                                print("Days and videos per day must be positive integers.")
+
+                            if videos_per_day <= 0:
+                                print("Videos per day must be a positive integer.")
                                 continue # Ask again
-                                
-                            # Calculate the number of videos that will be uploaded based on user input
-                            total_videos_scheduled = days_to_distribute * videos_per_day
-                            
-                            if total_videos_scheduled < total_videos_in_selection:
-                                print(f"Warning: With {days_to_distribute} days and {videos_per_day} videos per day, only {total_videos_scheduled} videos will be scheduled out of {total_videos_in_selection}. Continue? (yes/no)")
-                                continue_choice = input().lower()
-                                if continue_choice != 'yes':
-                                    continue # Ask again
-                            elif total_videos_scheduled > total_videos_in_selection:
-                                print(f"Warning: You specified enough slots ({total_videos_scheduled}) for more videos than found ({total_videos_in_selection}). All {total_videos_in_selection} videos will be scheduled.")
-                                
-                            
-                            # Generate schedule times
-                            # You can add an option here to let the user specify daily times if needed
-                            from utils.files_times import generate_schedule_time_next_day # Import here to avoid circular dependency
-                            schedule_times = generate_schedule_time_next_day(total_videos_in_selection, videos_per_day, start_days=0, timestamps=True) # Start from next day, return timestamps
-                            
+
+                            # Calculate the number of days required
+                            import math
+                            days_to_schedule = math.ceil(total_videos_in_selection / videos_per_day)
+                            end_date = start_date + timedelta(days=days_to_schedule - 1)
+                            print(f"This will schedule videos over approximately {days_to_schedule} days, ending around {end_date.strftime('%Y-%m-%d')}.")
+
+
+                            # Generate schedule times based on the selected start date and videos per day
+                            # We need to modify generate_schedule_time_next_day or create a new function
+                            # that takes a start_date and generates times.
+                            # For now, let's adapt the existing function call assuming it can handle a start day offset.
+                            # The generate_schedule_time_next_day seems to start from the *next* day (start_days=0 means tomorrow).
+                            # We need a function that can start from a specific date.
+                            # Let's manually generate the dates and times for now based on the start_date.
+
+                            schedule_times = []
+                            current_date = start_date
+                            videos_scheduled_count = 0
+
+                            # Assuming a default time like 10:00 AM for each day
+                            default_time = "10:00" # You could make this configurable later
+
+                            while videos_scheduled_count < total_videos_in_selection:
+                                for i in range(videos_per_day):
+                                    if videos_scheduled_count < total_videos_in_selection:
+                                        schedule_time_str = f"{current_date.strftime('%Y-%m-%d')} {default_time}"
+                                        schedule_times.append(schedule_time_str)
+                                        videos_scheduled_count += 1
+                                    else:
+                                        break # Stop if all videos are scheduled
+                                current_date += timedelta(days=1) # Move to the next day
+
+                            print(f"Generated {len(schedule_times)} schedule times starting from {start_date.strftime('%Y-%m-%d')}.")
+                            # print("Schedule times:", schedule_times) # Optional: print schedule for verification
+
                             # Attach the generated schedule times to the config for run_workflow to use
                             # We need a way to pass this schedule to the video processing loop in run_workflow
                             # One way is to add it to the selected_account_config, perhaps under a new key
                             # This requires run_workflow to be updated to look for this schedule.
-                            # For now, let's assume we modify run_workflow to accept and use this.
+                            # For now, the schedule is added to selected_account_config and we pass that via temp file.
+                            # Assuming run_workflow is updated to read 'generated_schedule' from the config.
                             selected_account_config['generated_schedule'] = schedule_times
-                            
-                            print(f"Generated schedule for {total_videos_in_selection} videos starting from tomorrow.")
-                            # print("Schedule times:", schedule_times) # Optional: print schedule for verification
-                            
+
                             break # Exit scheduling loop
-                            
+
                         except ValueError:
                             print("Invalid input. Please enter a valid integer.")
 
-                    break # Exit outer loop
+                    break # Exit video type selection loop
                 elif not invalid_choice:
                      print("No video types selected.")
                      return # Exit function if no types selected
@@ -383,6 +403,10 @@ async def run_workflow_interactively():
             tmp_file_path = tmp_file.name
         try:
             from utils.base_social_media import run_workflow
+            # Need to pass the schedule times to run_workflow
+            # This requires modifying run_workflow to accept a schedule_times list or key in config
+            # For now, the schedule is added to selected_account_config and we pass that via temp file.
+            # Assuming run_workflow is updated to read 'generated_schedule' from the config.
             await run_workflow(tmp_file_path) # Pass path to temp file
         finally:
             os.remove(tmp_file_path) # Clean up temp file
