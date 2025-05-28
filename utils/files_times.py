@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from conf import BASE_DIR
+from utils.log import douyin_logger
 
 
 def get_absolute_path(relative_path: str, base_dir: str = None) -> str:
@@ -26,14 +27,28 @@ def get_title_and_hashtags(filename):
     # 获取视频标题和 hashtag txt 文件名
     txt_filename = filename.replace(".mp4", ".txt")
 
-    # 读取 txt 文件
-    with open(txt_filename, "r", encoding="utf-8") as f:
-        content = f.read()
+    title = ""
+    hashtags = []
 
-    # 获取标题和 hashtag
-    splite_str = content.strip().split("\n")
-    title = splite_str[0]
-    hashtags = splite_str[1].replace("#", "").split(" ")
+    try:
+        # 读取 txt 文件
+        with open(txt_filename, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # 获取标题和 hashtag
+        splite_str = content.strip().split("\n")
+        title = splite_str[0]
+        # Check if there's a second line for hashtags
+        if len(splite_str) > 1:
+            hashtags = splite_str[1].replace("#", "").split(" ")
+        else:
+             douyin_logger.warning(f"No hashtags found in {txt_filename}.")
+
+    except FileNotFoundError:
+        douyin_logger.warning(f"Title/hashtags file not found for {filename} at {txt_filename}.")
+
+    except Exception as e:
+         douyin_logger.error(f"Error reading title/hashtags from {txt_filename}: {e}")
 
     return title, hashtags
 

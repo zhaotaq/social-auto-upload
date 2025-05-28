@@ -117,7 +117,7 @@ async def run_workflow(config: dict | str):
                 continue
             
             # Find video files in the video type directory
-            video_files = sorted(list(video_type_path.glob("*.mp4"))) # Sort to process in a consistent order
+            video_files = sorted(list(video_type_path.glob("**/*.mp4"))) # Sort to process in a consistent order, recursively
             
             if not video_files:
                 print(f"No MP4 videos found for video type '{video_type}' in {video_type_path}. Skipping.")
@@ -248,18 +248,22 @@ async def run_workflow(config: dict | str):
                     # Process results/exceptions
                     for i, result in enumerate(results):
                         task = upload_tasks[i]
-                        platform_name = task.get_name().split('_')[0] # Extract platform name from task name
+                        task_name = task.get_name()
+                        platform_name = task_name.split('_')[0] # Extract platform name from task name
+                        video_name = '_'.join(task_name.split('_')[2:]) # Extract video name from task name
+                        
                         if isinstance(result, Exception):
                             # Check if the exception is a Playwright TargetClosedError
-                            if isinstance(result, playwright._impl._errors.TargetClosedError):
+                            if isinstance(result, playwright._impl._api_types.TargetClosedError):
                                 # Log as a warning or info if it's a known non-critical error after successful upload
                                 # This assumes the upload itself completed successfully before this error
-                                tencent_logger.warning(f"      Upload task for {platform_name} for {video_file.name} encountered TargetClosedError after completion: {result}")
+                                tencent_logger.warning(f"      Upload task for {platform_name} for {video_name} encountered TargetClosedError: {result}")
                             else:
-                                # Log other exceptions as errors
-                                tencent_logger.error(f"      Upload to {platform_name} for {video_file.name} failed: {result}")
-                        # else:
-                            # print(f"      Upload to {platform_name} for {video_file.name} completed successfully.") # Optional success message
+                                # Log other exceptions as errors, including full traceback
+                                import traceback
+                                tencent_logger.error(f"      Upload to {platform_name} for {video_name} failed with unexpected error: {result}\n{traceback.format_exc()}")
+                        else:
+                            tencent_logger.success(f"      Upload to {platform_name} for {video_name} completed successfully.")
 
                 # Add a small delay between processing different videos
                 # await asyncio.sleep(5) # Original delay - removed as it's between videos within a video type

@@ -4,7 +4,7 @@ from .file_manager import FileManager, generate_initial_file_info
 
 def main():
     # Use ChangeLookAndFeel for compatibility with potentially older PySimpleGUI versions
-    sg.ChangeLookAndFeel('LightBlue3')  # Set a theme
+    sg.theme('LightBlue3')  # Set a theme
 
     layout = create_layout()
     window = sg.Window('视频上传文件管理器', layout, finalize=True)
