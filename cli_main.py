@@ -180,6 +180,15 @@ async def manage_cookies_menu():
             await ks_setup(str(cookie_file), handle=True)
         elif selected_platform == SOCIAL_MEDIA_TENCENT:
             await weixin_setup(str(cookie_file), handle=True)
+        elif selected_platform == 'bilibili': # 处理 bilibili 平台
+            print("\n----------------------------------------------------------------")
+            print("要获取账户 '{}' 的 Bilibili Cookie，请在终端中运行以下命令：".format(selected_account.get('name')))
+            # 使用双引号确保路径正确解析
+            biliup_command = f'.\\biliup.exe -u \"{str(cookie_file)}\" login'
+            print(biliup_command)
+            print("\nCookie 文件将会保存在: {}.json (该路径已包含在上面的命令中)".format(str(cookie_file).rsplit('.', 1)[0])) # 打印保存路径，去掉.json
+            print("运行命令后，请按照 biliup.exe 的提示完成登录。")
+            print("----------------------------------------------------------------")
         # elif selected_platform == SOCIAL_MEDIA_TIKTOK:
         #     await tiktok_setup(str(cookie_file), handle=True)
         # Add other platforms as needed
