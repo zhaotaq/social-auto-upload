@@ -1,6 +1,6 @@
 import PySimpleGUI as sg
-from .gui_layout import create_layout
-from .file_manager import FileManager, generate_initial_file_info
+from gui_layout import create_layout
+from file_manager import FileManager, generate_initial_file_info
 
 def main():
     # Use ChangeLookAndFeel for compatibility with potentially older PySimpleGUI versions
