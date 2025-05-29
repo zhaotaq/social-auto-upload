@@ -253,8 +253,14 @@ async def run_workflow(config: dict | str):
                         video_name = '_'.join(task_name.split('_')[2:]) # Extract video name from task name
                         
                         if isinstance(result, Exception):
+                            # Import necessary Playwright exception type here
+                            try:
+                                from playwright.async_api import TargetClosedError
+                            except ImportError:
+                                TargetClosedError = None # Define as None if Playwright types not available
+
                             # Check if the exception is a Playwright TargetClosedError
-                            if isinstance(result, playwright._impl._api_types.TargetClosedError):
+                            if TargetClosedError is not None and isinstance(result, TargetClosedError):
                                 # Log as a warning or info if it's a known non-critical error after successful upload
                                 # This assumes the upload itself completed successfully before this error
                                 tencent_logger.warning(f"      Upload task for {platform_name} for {video_name} encountered TargetClosedError: {result}")

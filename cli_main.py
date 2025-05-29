@@ -6,6 +6,7 @@ from pathlib import Path
 import json
 import tempfile
 import os
+import nest_asyncio
 
 from conf import BASE_DIR
 from uploader.douyin_uploader.main import douyin_setup, DouYinVideo
@@ -420,4 +421,5 @@ async def run_workflow_interactively():
 
 
 if __name__ == "__main__":
+    nest_asyncio.apply()
     asyncio.run(main())

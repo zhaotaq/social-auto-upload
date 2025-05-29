@@ -2,6 +2,8 @@ import json
 import pathlib
 import random
 from biliup.plugins.bili_webup import BiliBili, Data
+from datetime import datetime
+import os
 
 from utils.log import bilibili_logger
 
@@ -60,9 +62,13 @@ class BilibiliUploader(object):
         self.data.desc = self.desc
         self.data.tid = self.tid
         self.data.set_tag(self.tags)
-        self.data.dtime = self.dtime
+        # Convert datetime object to Unix timestamp if it's a datetime object
+        if isinstance(self.dtime, datetime):
+            self.data.dtime = int(self.dtime.timestamp())
+        else:
+            self.data.dtime = self.dtime # Keep it as is (likely 0 for immediate publish)
 
-    def upload(self):
+    async def upload(self):
         with BiliBili(self.data) as bili:
             bili.login_by_cookies(self.cookie_data)
             bili.access_token = self.cookie_data.get('access_token')
@@ -72,8 +78,8 @@ class BilibiliUploader(object):
             self.data.append(video_part)
             ret = bili.submit()  # 提交视频
             if ret.get('code') == 0:
-                bilibili_logger.success(f'[+] {self.file.name}上传 成功')
+                bilibili_logger.success(f'[+] {os.path.basename(str(self.file))}上传 成功')
                 return True
             else:
-                bilibili_logger.error(f'[-] {self.file.name}上传 失败, error messge: {ret.get("message")}')
+                bilibili_logger.error(f'[-] {os.path.basename(str(self.file))}上传 失败, error messge: {ret.get("message")}')
                 return False
