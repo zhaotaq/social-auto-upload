@@ -13,7 +13,7 @@
         {
             "name": "A-时光像素辑",
             "video_types": ["冒险岛枫之传说", "梦幻西游"],
-            "platforms": ["douyin"]
+            "platforms": ["douyin", "bilibili", "kuaishou"]
         },
         {
             "name": "B-萌侠跳跳糖",
