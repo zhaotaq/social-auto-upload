@@ -324,6 +324,9 @@ async def run_workflow_interactively():
                                     account_name = account.get('name')
                                     if account_name:
                                         video_type_path = base_videos_path / account_name / video_type
+                                        print(f"Checking path: {video_type_path}")
+                                        print(f"Path exists: {video_type_path.exists()}")
+                                        print(f"Path is directory: {video_type_path.is_dir()}")
                                         if video_type_path.exists() and video_type_path.is_dir():
                                             # Count .mp4 files recursively
                                             for _ in video_type_path.glob("**/*.mp4"):
@@ -423,3 +426,4 @@ async def run_workflow_interactively():
 if __name__ == "__main__":
     nest_asyncio.apply()
     asyncio.run(main())
+    
